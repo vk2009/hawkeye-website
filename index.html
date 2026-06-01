@@ -169,22 +169,61 @@
   </div>
 
   <div class="code-block">
-<span class="cm"># trajectory_engine.py — core trajectory reconstruction</span>
-<span class="kw">def</span> <span class="fn">fit_trajectory</span>(pixel_coords, frame_timestamps):
-    <span class="cm"># Build observation matrix: x(t), y(t) from detections</span>
-    t = np.array(frame_timestamps)
-    x = np.array([p[<span class="num">0</span>] <span class="kw">for</span> p <span class="kw">in</span> pixel_coords])
-    y = np.array([p[<span class="num">1</span>] <span class="kw">for</span> p <span class="kw">in</span> pixel_coords])
-    <span class="cm"># Fit parabolic model to y(t): y = a*t² + b*t + c  (gravity)</span>
-    coeffs_y = np.polyfit(t, y, <span class="num">2</span>)
-    coeffs_x = np.polyfit(t, x, <span class="num">1</span>)   <span class="cm"># linear in x</span>
-    <span class="kw">return</span> coeffs_x, coeffs_y
+    <div class="code-header">
+      <strong>blender_original.py — first 50 lines</strong>
+      <a href="blender.txt" class="btn btn-outline" target="_blank">View full Blender code</a>
+    </div>
+    <pre><code>
+<span class="kw">import</span> <span class="fn">bpy</span>
+<span class="kw">import</span> <span class="fn">math</span>
+<span class="kw">import</span> <span class="fn">numpy</span> <span class="kw">as</span> <span class="fn">np</span>
+<span class="cm"># 1. Your Ball Data (e.g., from a physics engine or camera tracking)</span>
+<span class="cm"># Format: (x, y, z)</span>
 
-<span class="kw">def</span> <span class="fn">predict_wicket_impact</span>(coeffs_x, coeffs_y, stumps_x_pixel):
-    <span class="cm"># Extrapolate forward to stumps plane</span>
-    t_impact = (stumps_x_pixel - coeffs_x[<span class="num">1</span>]) / coeffs_x[<span class="num">0</span>]
-    y_impact = np.polyval(coeffs_y, t_impact)
-    <span class="kw">return</span> t_impact, y_impact
+<span class="cm"># PARAMS</span>
+
+bowler_stumps = <span class="num">10.06</span>
+bat_stumps = <span class="num">-10.06</span>
+
+<span class="cm"># Specificity:</span>
+num_points = <span class="num">50</span>
+
+<span class="cm"># CHANGEABLES</span>
+<span class="cm">#----------------------</span>
+release_point_y = <span class="num">1</span>
+
+contact = <span class="num">3</span>
+
+start_line = <span class="num">0.5</span>
+end_line=<span class="num">0.05</span>
+height = <span class="num">2</span>
+
+speed_mph = <span class="num">70</span>
+
+length = <span class="num">17.06</span>
+use_deg=<span class="kw">True</span>
+choose_deg = <span class="num">-4</span>
+<span class="cm">#-----------------------</span>
+
+<span class="cm"># Bounce and speed</span>
+restitution=<span class="num">0.55</span>
+friction_factor=<span class="num">0.95</span>
+
+<span class="cm"># Field parameters</span>
+rad_ball = <span class="num">0.035</span>
+rad_stumps=<span class="num">0</span>#<span class="num">0.017</span>
+pitch_length = <span class="num">20.12</span>
+
+bowler_end = bowler_stumps - release_point_y
+bat_end = bat_stumps + contact
+bat_stumps_ball = bat_stumps+rad_ball+rad_stumps
+speed_ms = speed_mph * <span class="num">0.44704</span>
+
+
+
+
+<span class="cm"># Finds angle with distance, speed, and release height</span>
+    </code></pre>
   </div>
 
   <p class="section-note">
@@ -210,16 +249,13 @@
   <h2>The Final Product</h2>
 
   <p>
-    The product is a fully functional ball-tracking and trajectory-visualisation pipeline that takes a single video feed of a cricket delivery and produces a professional-style DRS review output — the kind you see on broadcast TV, built to run on consumer hardware.
+    The product is a functional ball-tracking and trajectory-visualisation pipeline that takes a single-camera video of a cricket delivery and produces a rendered animation showing the ball's path, pitch point, impact point, and predicted trajectory through the stumps. The system is designed to be accessible to amateur players and clubs, requiring only a standard video recording setup and a laptop for processing. It is not yet a polished app as we have to tune the prediction models, integrate videos, and do a lot more testing.
   </p>
   <p>
-    The system is composed of three integrated components: a detection module that locates the ball in every frame of the video, a trajectory engine that reconstructs the 3D path from 2D observations using physics-based inference, and a Blender rendering pipeline that produces a clear, animated visualisation of the ball's actual path alongside its predicted continuation.
+    The system utilizes custom code for ball detection and tracking and Blender's Python API for rendering the visual output. The core innovation is the ability to predict the ball's path beyond the point of impact, allowing for an LBW decision review even when the ball is intercepted by the batter's pad or bat.
   </p>
   <p>
     The output video shows the ball travelling from release to impact, with a pitch-point marker appearing where the ball first makes contact with the ground, an impact marker at the point it struck the batter's pad or bat, and — critically — a predicted trajectory line showing where the ball would have continued had it not been interrupted. This predicted path is compared against the wicket geometry to determine whether the delivery was hitting the stumps: the core of every LBW decision.
-  </p>
-  <p>
-    The entire system runs from a single camera positioned side-on or from behind the stumps — the standard angles available at any amateur ground. No specialist hardware is required beyond a video camera or smartphone capable of recording at 30fps or higher. The pipeline is open-source and designed to be run from a laptop at the ground's edge.
   </p>
 
   <div class="cards-grid">
@@ -243,20 +279,18 @@
   <h3 class="section-subtitle">Simulation Renders</h3>
 
   <div class="gallery">
-    <img src="../Image Renders/Simulation_Hawk1.png" alt="Simulation render 1 — ball trajectory overview" onerror="this.style.display='none'" />
-    <img src="../Image Renders/Simulation_Hawk2.png" alt="Simulation render 2 — pitch point marker" onerror="this.style.display='none'" />
-    <img src="../Image Renders/Simulation_Hawk3.png" alt="Simulation render 3 — impact point" onerror="this.style.display='none'" />
-    <img src="../Image Renders/Simulation_Hawk4.png" alt="Simulation render 4 — predicted trajectory" onerror="this.style.display='none'" />
-    <img src="../Image Renders/Simulation_Hawk5.png" alt="Simulation render 5 — wicket prediction" onerror="this.style.display='none'" />
+    <img src="../sample2.png" alt="Simulation render 1 — ball trajectory overview" onerror="this.style.display='none'" />
+    <img src="../sample1.png" alt="Simulation render 2 — pitch point marker" onerror="this.style.display='none'" />
+    <img src="../sample3.png" alt="Simulation render 3 — impact point and predicted path" onerror="this.style.display='none'" />
   </div>
 
   <h3 class="section-subtitle">Simulation Video</h3>
 
   <div class="video-wrap">
     <video controls poster="../Image Renders/Simulation_Hawk1.png">
-      <source src="../Animation Renders/Simulation.mp4" type="video/mp4" />
-      <source src="../Animation Renders/Simulation_v004.mp4" type="video/mp4" />
-      Your browser does not support video playback.
+      <!-- <source src="../Animation Renders/Simulation.mp4" type="video/mp4" /> -->
+      <source src="../sim1.mp4" type="video/mp4" />
+      <!-- Your browser does not support video playback. -->
     </video>
   </div>
 </section>
