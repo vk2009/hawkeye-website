@@ -578,6 +578,27 @@ p {
   border-radius: 100px;
 }
 
+.reflection-resources {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+.poster-preview {
+  width: 100%;
+  display: block;
+  margin-top: 1rem;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+}
+
+@media (max-width: 780px) {
+  .reflection-resources {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* FOOTER */
 footer {
   text-align: center;
