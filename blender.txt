@@ -1,0 +1,1511 @@
+import bpy
+import math
+import numpy as np
+# 1. Your Ball Data (e.g., from a physics engine or camera tracking)
+# Format: (x, y, z)
+
+# PARAMS
+
+bowler_stumps = 10.06
+bat_stumps = -10.06
+
+# Specificity:
+num_points = 50
+
+# CHANGEABLES
+#----------------------
+release_point_y = 1
+
+contact = 3
+
+start_line = 0.5
+end_line=0.05
+height = 2
+
+speed_mph = 70
+
+length = 17.06
+use_deg=True
+choose_deg = -4
+#-----------------------
+
+# Bounce and speed
+restitution=0.55
+friction_factor=0.95
+
+# Field parameters
+rad_ball = 0.035
+rad_stumps=0#0.017
+pitch_length = 20.12
+
+bowler_end = bowler_stumps - release_point_y
+bat_end = bat_stumps + contact
+bat_stumps_ball = bat_stumps+rad_ball+rad_stumps
+speed_ms = speed_mph * 0.44704
+
+
+
+
+# Finds angle with distance, speed, and release height
+
+def find_angle(d, speed_ms, height):
+    if (d==0):
+        d = 0.001
+    A = (9.81*(d**2))/(2*(speed_ms**2))
+    theta1 = math.atan((d + math.sqrt(d**2 - (4*A*(A-height))))/(2*A))
+
+    theta2 = math.atan((d - math.sqrt(d**2 - (4*A*(A-height))))/(2*A))
+
+    angle_degrees = math.degrees(min(theta1,theta2))
+    angle_degrees = round(angle_degrees,1)
+    
+    return angle_degrees
+
+# COLORS
+
+red = (1.0, 0.0, 0.0, 1.0)
+blue = (0.0, 0.1, 0.4, 1.0)
+
+if use_deg:
+    angle_r = math.radians(choose_deg)
+    v_forward = speed_ms * math.cos(angle_r)
+    v_vertical = speed_ms * math.sin(angle_r)
+    
+    g = 9.81
+    a = -0.5 * g
+    b = v_vertical
+    c = height
+    
+    discriminant = b**2 - 4*a*c
+    t_pitch = (-b - math.sqrt(discriminant)) / (2*a)
+    
+    pitch_distance = (v_forward * t_pitch) - release_point_y
+#    pitch_distance = min(pitch_distance_calc, pitch_length-release_point_y)
+else:
+    pitch_distance = pitch_length - length - release_point_y
+
+def generate_cricket_ball_points(
+    start_line=0.0,           # X coordinate at release (line/deviation at bowler's end)
+    end_line=None,            # X coordinate at batsman's end (None = same as start_line)
+    speed_mph=145,            # Ball speed
+    release_height=2.0,       # Release height in meters
+    bowler_y=10.06,               # Bowler's end Y coordinate (crease position)
+    batsman_y=-10.06,        # Batsman's end Y coordinate
+    pitch_distance=None,     # Distance from bowler where ball pitches (None = calculate from angle)
+    pitch_y=None,            # Absolute Y coordinate where ball pitches (overrides pitch_distance)
+    angle_degrees=-10.6,     # Release angle (only used if pitch_distance/pitch_y not provided)
+    num_tracking_points=10,    # Number of points before bounce
+    friction_factor=0.95,
+    restitution=0.55
+):
+    """
+    Generate physically accurate cricket ball trajectory points.
+    
+    Args:
+        start_line: X coordinate at bowler's end (deviation at release)
+        end_line: X coordinate at batsman's end (None = no deviation, stays on start_line)
+        speed_mph: Ball speed in mph
+        release_height: Release height in meters
+        bowler_y: Y coordinate of bowler's crease (positive, e.g., 10.06)
+        batsman_y: Y coordinate of batsman's crease (negative, e.g., -10.06)
+        pitch_distance: Distance from bowler's crease where ball pitches (meters from bowler_y)
+        pitch_y: Absolute Y coordinate where ball pitches (overrides pitch_distance)
+        angle_degrees: Downward release angle if pitch location not specified
+        num_tracking_points: Number of tracking points before bounce
+    
+    Returns:
+        List of (x, y, z) coordinates
+    
+    Examples:
+        # Standard delivery - straight line, pitches 10.06m from bowler
+        generate_cricket_ball_points()
+        
+        # Off-side delivery - starts at 0.3, ends at 0.5 (moving away)
+        generate_cricket_ball_points(start_line=0.3, end_line=0.5)
+        
+        # Leg-side delivery - starts at -0.2, ends at -0.4 (moving in)
+        generate_cricket_ball_points(start_line=-0.2, end_line=-0.4)
+        
+        # Yorker - pitches at Y = -9.0 (1 meter from batsman)
+        generate_cricket_ball_points(pitch_y=-9.0)
+        
+        # Bouncer - pitches 7 meters from bowler
+        generate_cricket_ball_points(pitch_distance=7.0)
+        
+        # Good length with swing - starts on middle, ends on off
+        generate_cricket_ball_points(start_line=0, end_line=0.4, pitch_distance=10.0)
+    """
+    
+    # If end_line not specified, ball travels straight (no lateral deviation)
+    if end_line is None:
+        end_line = start_line
+    
+    # Convert speed to m/s
+    speed_ms = speed_mph * 0.44704
+    
+    # Total pitch length
+    total_distance = bowler_y - batsman_y  # e.g., 10.06 - (-10.06) = 20.12m
+    
+    # Determine pitch location
+    if pitch_y is not None:
+        # Absolute Y coordinate given
+        pitch_location_y = pitch_y
+        
+    elif pitch_distance is not None:
+        # Distance from bowler's crease given
+        pitch_location_y = bowler_y - pitch_distance
+    else:
+        # Calculate from angle (default behavior)
+        angle_rad = math.radians(angle_degrees)
+        v_forward = speed_ms * math.cos(angle_rad)
+        v_vertical = speed_ms * math.sin(angle_rad)
+        
+        g = 9.81
+        a = -0.5 * g
+        b = v_vertical
+        c = release_height
+        
+        discriminant = b**2 - 4*a*c
+        t_pitch = (-b - math.sqrt(discriminant)) / (2*a)
+        
+        pitch_distance_calc = v_forward * t_pitch
+        pitch_location_y = bowler_y - pitch_distance_calc
+    
+    # Now calculate the actual physics based on pitch location
+    distance_to_pitch = bowler_y - pitch_location_y  # How far forward to pitch point
+    
+    # Calculate required angle to reach pitch point
+    # Using projectile motion: need to find initial angle
+    g = 9.81
+    
+    # Horizontal distance and height difference
+    horizontal_dist = distance_to_pitch
+    height_diff = release_height  # Ball goes from release_height to 0
+    
+    # Calculate required vertical velocity component
+    # Using: z = z0 + vz*t - 0.5*g*t^2, where final z = 0
+    # And: y = v_forward * t
+    # So: t = horizontal_dist / v_forward
+    
+    # Estimate time to pitch (we'll iterate to get exact values)
+    v_forward = speed_ms * 0.98  # Assume mostly horizontal velocity
+    t_to_pitch = horizontal_dist / v_forward
+    
+    # Required vertical velocity to reach ground at that time
+    # 0 = release_height + vz*t - 0.5*g*t^2
+    # vz = (0.5*g*t^2 - release_height) / t
+    v_vertical_required = (0.5 * g * t_to_pitch**2 - release_height) / t_to_pitch
+    
+    # Adjust forward velocity to maintain total speed
+    total_speed_sq = speed_ms**2
+    v_vertical_sq = v_vertical_required**2
+    
+    # Prevent negative square root (ball speed too slow to reach that point)
+    if v_vertical_sq > total_speed_sq:
+        # Ball can't reach this point at this speed, adjust
+        v_vertical_required = speed_ms * 0.7  # Use 70% of speed for vertical
+        v_forward = speed_ms * 0.714  # Remaining for forward
+    else:
+        v_forward = math.sqrt(total_speed_sq - v_vertical_sq)
+    
+    # Prevent divide by zero
+    if v_forward < 0.1:  # If forward velocity too small
+        v_forward = 0.1
+    
+    # Recalculate time with adjusted forward velocity
+    t_to_pitch = horizontal_dist / v_forward
+    v_vertical = (0.5 * g * t_to_pitch**2 - release_height) / t_to_pitch
+    
+    # Calculate lateral (X) velocity for swing/deviation
+    total_lateral_deviation = end_line - start_line
+    v_lateral = total_lateral_deviation / (total_distance / v_forward)  # Constant lateral drift
+    
+     # Generate points before bounce
+    points = []
+    
+    new_num_tracking_points = int(num_tracking_points*(pitch_distance/total_distance))
+    for i in range(new_num_tracking_points):
+        t = (i / (new_num_tracking_points - 1)) * t_to_pitch
+        
+        x = start_line + v_lateral * t
+        y = bowler_y - v_forward * t
+        z = release_height + v_vertical * t - 0.5 * g * t**2
+        z = max(0, z)
+        points.append((x, y, z))
+    
+    # The last point should be the bounce point - replace it with exact bounce coordinates
+    pitch_x = start_line + v_lateral * t_to_pitch
+#    points.append((pitch_x, pitch_location_y, 0.0))
+    points[-1]= ((pitch_x, pitch_location_y, 0.0))  # Override last point to be exact bounce
+    
+    
+    # Velocities just before bounce
+    v_forward_before = v_forward
+    v_lateral_before = v_lateral
+    v_z_before = v_vertical - g * t_to_pitch
+    
+    # Velocities after bounce
+    v_forward_after = v_forward_before * friction_factor  # Slight friction loss
+    v_lateral_after = v_lateral_before  # Lateral velocity unchanged
+    v_z_after = -v_z_before * restitution  # Vertical bounces back
+    
+    # Generate points after first bounce, checking for subsequent bounces
+    remaining_distance = pitch_location_y - batsman_y
+    current_y = pitch_location_y
+    current_z = 0.0
+    current_x = pitch_x
+    current_v_z = v_z_after
+    current_v_forward = v_forward_after
+    current_v_lateral = v_lateral_after
+    
+    num_after_bounce = num_tracking_points - new_num_tracking_points
+    points_per_bounce_section = max(1, num_after_bounce // 3)  # Divide points among potential bounces
+    
+    bounce_count = 0
+    max_bounces = 3  # Limit total bounces
+    
+    while current_y > batsman_y and bounce_count < max_bounces:
+        # Calculate trajectory until next bounce or batsman
+        # Time until ball hits ground again (z = 0)
+        # 0 = current_v_z * t - 0.5 * g * t^2
+        # t = 2 * current_v_z / g (or when ball reaches batsman)
+        
+        if current_v_z > 0.01:  # Ball is going up
+            t_to_next_bounce = 2 * current_v_z / g
+        else:
+            # Ball already on ground or going down, one bounce section
+            t_to_next_bounce = min(1.0, remaining_distance / current_v_forward)
+        
+        distance_to_next_bounce = current_v_forward * t_to_next_bounce
+        next_bounce_y = current_y - distance_to_next_bounce
+        
+        # Check if ball reaches batsman before next bounce
+        if next_bounce_y <= batsman_y:
+            # Final section to batsman
+            t_to_batsman = (current_y - batsman_y) / current_v_forward
+            num_final_points = num_after_bounce - len(points) + new_num_tracking_points + 1
+            
+            for i in range(1, num_final_points + 1):
+                t = (i / num_final_points) * t_to_batsman
+                x = current_x + current_v_lateral * t
+                y = current_y - current_v_forward * t
+                z = current_v_z * t - 0.5 * g * t**2
+                z = max(0, z)
+                
+                if y <= batsman_y:
+                    points.append((x, batsman_y, z))
+                    break
+                points.append((x, y, z))
+            break
+        
+        # Generate points to next bounce
+        for i in range(1, points_per_bounce_section + 1):
+            t = (i / points_per_bounce_section) * t_to_next_bounce
+            x = current_x + current_v_lateral * t
+            y = current_y - current_v_forward * t
+            z = current_v_z * t - 0.5 * g * t**2
+            z = max(0, z)
+            points.append((x, y, z))
+        
+        # Update for next bounce
+        bounce_count += 1
+        current_y = next_bounce_y
+        current_x = current_x + current_v_lateral * t_to_next_bounce
+        current_z = 0.0
+        
+        # Velocity just before this bounce
+        v_z_before_bounce = current_v_z - g * t_to_next_bounce
+        
+        # Velocity after this bounce
+        current_v_z = -v_z_before_bounce * restitution
+        current_v_forward = current_v_forward * friction_factor
+        
+        # Add bounce point
+        points.append((current_x, current_y, 0.0))
+    
+    # Handle full toss - cut off at batsman's end if ball goes past
+    cutoff_index = None
+    for i, point in enumerate(points):
+        if point[1] <= batsman_y:  # Ball reached batsman's end
+            cutoff_index = i
+            # Set this point exactly at batsman's crease
+            final_x = point[0]
+            final_z = point[2]
+            points[i] = (final_x, batsman_y, final_z)
+            break
+    
+    # Truncate after the cutoff point
+    if cutoff_index is not None:
+        points = points[:cutoff_index + 1]
+    
+    return points
+
+
+
+#points = [
+#    (start_line, bowler_end, 2), (start_line, bowler_end-2.012, 1.6),  (start_line, 0, 0),   # (start_line, bowler_end-5, 1.5),# Pre-bounce
+#    (start_line, -1, 0.4), (start_line, -5, 1.2), (start_line, bat_end, 0.8) # Post-bounce
+#    #(start_line, -1, 0.4), (start_line, -5, 1.2), 
+#]
+
+points = generate_cricket_ball_points(
+    start_line=start_line,           # X coordinate at release (line/deviation at bowler's end)
+    end_line=end_line,            # X coordinate at batsman's end (None = same as start_line)
+    bowler_y=bowler_end,
+    batsman_y=bat_end,
+    speed_mph=speed_mph,            # Ball speed
+    release_height=height,       # Release height in meters
+    pitch_distance=pitch_distance,     # Distance from bowler where ball pitches (None = calculate from angle)
+#    pitch_y=None,            # Absolute Y coordinate where ball pitches (overrides pitch_distance)
+#    angle_degrees=choose_deg,     # Release angle (only used if pitch_distance/pitch_y not provided)
+    num_tracking_points=num_points,
+    friction_factor = friction_factor,
+    restitution=restitution
+)
+
+# Find all bounce points (where z is exactly 0.0 and it's not the last point)
+bounce_index = []
+for i in range(len(points)):
+    if points[i][2] == 0.0 and i > 0 and i < len(points) - 1:
+        # Check if previous point had z > 0 (coming down to bounce)
+        if points[i-1][2] > 0:
+            bounce_index.append(i)
+
+# If no bounces found, check for full toss (no bounce at all)
+if not bounce_index:
+    bounce_index = []
+
+
+
+
+def fit_parabolic_trajectory(points):
+    """
+    Fit a parabolic trajectory through given points using physics.
+    Returns a function that can generate intermediate points along the fitted arc.
+    """
+    if len(points) < 2:
+        return None
+    
+    # Extract coordinates
+    xs = [p[0] for p in points]
+    ys = [p[1] for p in points]
+    zs = [p[2] for p in points]
+    
+    # Calculate time parameters (distance-based)
+    times = [0]
+    for i in range(1, len(points)):
+        dist = math.sqrt(
+            (xs[i] - xs[i-1])**2 + 
+            (ys[i] - ys[i-1])**2 + 
+            (zs[i] - zs[i-1])**2
+        )
+        times.append(times[-1] + dist)
+    
+    # Normalize times to [0, 1]
+    max_time = times[-1]
+    times = [t / max_time for t in times]
+    
+    # Fit polynomial curves for each dimension
+    # X and Y: linear (constant velocity in horizontal plane)
+    # Z: quadratic (parabolic motion under gravity)
+    
+    if len(points) >= 3:
+        # Quadratic fit for X, Y, Z
+        x_coeffs = np.polyfit(times, xs, min(2, len(points) - 1))
+        y_coeffs = np.polyfit(times, ys, min(2, len(points) - 1))
+        z_coeffs = np.polyfit(times, zs, 2)  # Always quadratic for Z (gravity)
+    else:
+        # Linear fit for 2 points
+        x_coeffs = np.polyfit(times, xs, 1)
+        y_coeffs = np.polyfit(times, ys, 1)
+        z_coeffs = np.polyfit(times, zs, 1)
+    
+    def trajectory_func(t):
+        """Generate point at normalized time t (0 to 1)"""
+        x = np.polyval(x_coeffs, t)
+        y = np.polyval(y_coeffs, t)
+        z = np.polyval(z_coeffs, t)
+        return (float(x), float(y), float(z))
+    
+    return trajectory_func, max_time
+
+def generate_arc_between_points(start_point, end_point, trajectory_func, start_t, end_t, num_points):
+    """Generate smooth arc between two key points using the fitted trajectory"""
+    points = []
+    for i in range(num_points):
+        t = start_t + (end_t - start_t) * (i / (num_points-1))
+        points.append(trajectory_func(t))
+    return points
+
+def create_drs_path(key_points, bounce_indices=None, points_per_segment=20, transparency=0.5, color=(1.0, 0.0, 0.0, 1.0)):
+    """
+    Create a DRS-style ball tracking path that fits a parabolic trajectory
+    through the given points.
+    
+    Args:
+        key_points: List of tracked ball positions [(x,y,z), ...]
+        bounce_indices: Indices where ball bounces (sharp direction changes)
+        points_per_segment: Density of the generated curve
+    
+    Example:
+        # Ball trajectory with one bounce
+        create_drs_path([
+            (0, 0, 2),      # Release point
+            (2, 0, 1.5),    # Mid-flight
+            (4, 0, 0.1),    # Just before bounce
+            (6, 0, 0),      # Bounce point
+            (8, 0, 0.5),    # After bounce
+            (10, 0, 0.8)    # End point
+        ], bounce_indices=[3])
+    """
+    
+    if len(key_points) < 2:
+        raise ValueError("Need at least 2 points")
+    
+    # If no bounces specified, assume all middle points are bounces
+    if bounce_indices is None:
+        bounce_indices = []
+    
+    bounce_set = set(bounce_indices)
+    
+    # Split points into segments at each bounce
+    segments = []
+    current_segment = [key_points[0]]
+    
+    for i in range(1, len(key_points)):
+        current_segment.append(key_points[i])
+        
+        # If this is a bounce point or the last point, end this segment
+        if i in bounce_set or i == len(key_points) - 1:
+            segments.append(current_segment)
+            if i < len(key_points) - 1:  # Not the last point
+                current_segment = [key_points[i]]  # Start new segment from bounce point
+    
+    # Generate smooth arcs for each segment
+    all_coords = []
+    bounce_positions = []
+    
+    for seg_idx, segment in enumerate(segments):
+        if len(segment) < 2:
+            continue
+        
+        # Fit trajectory through this segment's points
+        trajectory_func, max_time = fit_parabolic_trajectory(segment)
+        
+        # Calculate normalized time for each point in segment
+        times = [0]
+        for i in range(1, len(segment)):
+            dist = math.sqrt(
+                sum((segment[i][j] - segment[i-1][j])**2 for j in range(3))
+            )
+            times.append(times[-1] + dist)
+        
+        # Normalize times
+        if times[-1] > 0:
+            times = [t / times[-1] for t in times]
+        else:
+            times = [i / (len(segment) - 1) for i in range(len(segment))]
+        
+        # Generate points between each pair of key points in this segment
+        for i in range(len(segment) - 1):
+            arc_points = generate_arc_between_points(
+                segment[i], 
+                segment[i + 1],
+                trajectory_func,
+                times[i],
+                times[i + 1],
+                points_per_segment
+            )
+            
+            # Add points (avoid duplicates at segment boundaries)
+            if len(all_coords) == 0:
+                all_coords.extend(arc_points)
+            else:
+                all_coords.extend(arc_points[1:])
+        
+        # Mark bounce position (at the end of this segment, before next segment)
+        if seg_idx < len(segments) - 1:  # Not the last segment
+            bounce_positions.append(len(all_coords) - 1)
+    
+    # Create Bezier curve
+
+#    curve_data = bpy.data.curves.new('DRS_Path', type='CURVE')
+
+    curve_name = 'DRS_Path'
+    
+    # Remove old curve if it exists
+    if curve_name in bpy.data.curves:
+        old_curve = bpy.data.curves[curve_name]
+        bpy.data.curves.remove(old_curve)
+    
+    # Create new Bezier curve
+    curve_data = bpy.data.curves.new(curve_name, type='CURVE')
+    
+    curve_data.dimensions = '3D'
+    curve_data.resolution_u = 64
+    
+    spline = curve_data.splines.new('BEZIER')
+    spline.bezier_points.add(len(all_coords) - 1)
+    
+    for i, coord in enumerate(all_coords):
+        p = spline.bezier_points[i]
+        p.co = coord
+        
+        # Sharp turn at bounces (VECTOR handles)
+        if i in bounce_positions:
+            p.handle_left_type = 'VECTOR'
+            p.handle_right_type = 'VECTOR'
+        else:
+            # Smooth parabolic arc everywhere else (AUTO handles)
+            p.handle_left_type = 'AUTO'
+            p.handle_right_type = 'AUTO'
+    
+    # Link to scene
+    obj = bpy.data.objects.new('DRS_BallPath', curve_data)
+    bpy.context.collection.objects.link(obj)
+    obj.data.bevel_depth = 0.02
+    
+    # Disable shadows for the DRS path
+    obj.visible_shadow = False
+
+    
+    # Create material with transparency
+    
+#    mat = bpy.data.materials.new(name="DRS_Material")
+
+    mat_name = "DRS_Material"
+    if mat_name in bpy.data.materials:
+        mat = bpy.data.materials[mat_name]
+    else:
+        mat = bpy.data.materials.new(name=mat_name)
+        
+    
+    mat.use_nodes = True
+    obj.data.materials.append(mat)
+    
+    # Get the material nodes
+    nodes = mat.node_tree.nodes
+    links = mat.node_tree.links
+    
+    # Clear default nodes
+    nodes.clear()
+    
+    # Add new nodes
+    output_node = nodes.new(type='ShaderNodeOutputMaterial')
+    bsdf_node = nodes.new(type='ShaderNodeBsdfPrincipled')
+    
+    # Position nodes
+    output_node.location = (300, 0)
+    bsdf_node.location = (0, 0)
+    
+    # Set material properties
+    bsdf_node.inputs['Base Color'].default_value = color  # Red color (DRS style)
+    bsdf_node.inputs['Alpha'].default_value = transparency  # Set transparency
+    bsdf_node.inputs['Roughness'].default_value = 0.3  # Slightly glossy
+    
+    # Link nodes
+    links.new(bsdf_node.outputs['BSDF'], output_node.inputs['Surface'])
+    
+    # Enable transparency in material settings
+    mat.blend_method = 'BLEND'  # Enable alpha blending
+    
+    # Try to set shadow method if available (Blender 3.0+)
+    try:
+        mat.shadow_method = 'NONE'
+    except AttributeError:
+        pass  # Ignore if not available in this Blender version
+    
+    # Enable transparency in viewport
+    obj.show_transparent = True
+    
+    return obj
+
+
+frames_per_point = 2
+
+def create_hawkeye_markers(coords, bounce_indices, predictive_markers=None):
+    """
+    Create Hawkeye-style marker spheres at key points that pop up when trail reaches them
+    
+    Args:
+        coords: List of trajectory points
+        bounce_indices: Indices where ball bounces
+        predictive_markers: List of tuples [(position, frame, color), ...] for predictive path markers
+    """
+    
+    # Remove old markers if they exist
+    for obj in bpy.data.objects:
+        if obj.name.startswith("HawkeyeMarker_") or obj.name.startswith("Predictive_HawkeyeMarker_"):
+            bpy.data.objects.remove(obj, do_unlink=True)
+    
+    marker_radius = 0.035
+    
+    # Key point indices: release (0), bounces, end (last)
+    key_indices = [0] + bounce_indices + [len(coords) - 1]
+    
+    for idx in key_indices:
+        if idx < len(coords):
+            pos = coords[idx]
+            
+            # Create marker sphere
+            bpy.ops.mesh.primitive_uv_sphere_add(radius=marker_radius, location=pos)
+            marker = bpy.context.active_object
+            marker.name = f"HawkeyeMarker_{idx}"
+            
+            # Hide until trail reaches this point, then show instantly
+            marker.hide_viewport = True
+            marker.hide_render = True
+            marker.keyframe_insert(data_path="hide_viewport", frame=idx)
+            marker.keyframe_insert(data_path="hide_render", frame=idx)
+            
+            marker.hide_viewport = False
+            marker.hide_render = False
+            marker.keyframe_insert(data_path="hide_viewport", frame=idx + 1)
+            marker.keyframe_insert(data_path="hide_render", frame=idx + 1)
+            
+            # Create glowing material
+            mat = bpy.data.materials.new(name=f"MarkerMaterial_{idx}")
+            mat.use_nodes = True
+            marker.data.materials.append(mat)
+            
+            nodes = mat.node_tree.nodes
+            links = mat.node_tree.links
+            nodes.clear()
+            
+            # Emission shader for glow
+            output = nodes.new(type='ShaderNodeOutputMaterial')
+            emission = nodes.new(type='ShaderNodeEmission')
+            
+            emission.inputs['Color'].default_value = (0.0, 0.1, 0.4, 1.0)  # Darker blue
+            emission.inputs['Strength'].default_value = 1.5  # Less bright glow
+            
+            links.new(emission.outputs['Emission'], output.inputs['Surface'])
+            
+            # Disable shadows
+            marker.visible_shadow = False
+    
+    # Create predictive markers if provided
+    if predictive_markers:
+        for pred_pos, pred_frame, pred_color in predictive_markers:
+            bpy.ops.mesh.primitive_uv_sphere_add(radius=marker_radius, location=pred_pos)
+            marker = bpy.context.active_object
+            marker.name = f"Predictive_HawkeyeMarker_{pred_frame}"
+            
+            # Hide until predictive path reaches it
+            marker.hide_viewport = True
+            marker.hide_render = True
+            marker.keyframe_insert(data_path="hide_viewport", frame=pred_frame)
+            marker.keyframe_insert(data_path="hide_render", frame=pred_frame)
+            
+            marker.hide_viewport = False
+            marker.hide_render = False
+            marker.keyframe_insert(data_path="hide_viewport", frame=pred_frame + 1)
+            marker.keyframe_insert(data_path="hide_render", frame=pred_frame + 1)
+            
+            # Create glowing material with custom color
+            mat = bpy.data.materials.new(name=f"PredictiveMarkerMaterial_{pred_frame}")
+            mat.use_nodes = True
+            marker.data.materials.append(mat)
+            
+            nodes = mat.node_tree.nodes
+            links = mat.node_tree.links
+            nodes.clear()
+            
+            output = nodes.new(type='ShaderNodeOutputMaterial')
+            emission = nodes.new(type='ShaderNodeEmission')
+            
+            emission.inputs['Color'].default_value = (pred_color[0], pred_color[1], pred_color[2], 1.0)
+            emission.inputs['Strength'].default_value = 1.5
+            
+            links.new(emission.outputs['Emission'], output.inputs['Surface'])
+            
+            marker.visible_shadow = False
+
+def create_smooth_drs(coords, bounce_index, color):
+    drs_obj = create_drs_path(coords, bounce_index, frames_per_point, 0.5, color)
+    return drs_obj
+
+def create_drs_system(coords, points_per_seg, color):
+    # Get or create the ball
+    if "CricketBall" not in bpy.data.objects:
+        bpy.ops.mesh.primitive_uv_sphere_add(radius=0.035)
+        ball = bpy.context.active_object
+        ball.name = "CricketBall"
+    else:
+        ball = bpy.data.objects["CricketBall"]
+
+    # 2. Animate the Ball
+    ball.animation_data_clear()
+    
+    # Animate the ball - one frame per point
+    for i, pos in enumerate(coords):
+        ball.location = pos
+        ball.keyframe_insert(data_path="location", frame=i)
+    
+    # 3. Create the Tracking Trail with Build Modifier (Hawkeye style)
+    drs_obj = create_smooth_drs(points, bounce_index, color)
+    
+    # Add Build modifier to animate the path drawing
+    build_mod = drs_obj.modifiers.new(name="Build", type='BUILD')
+    build_mod.frame_start = 0
+    build_mod.frame_duration = len(coords)-1  # Draw over the same duration as ball animation
+#    build_mod.frame_duration = len(coords) + 5  # Add a few extra frames to complete
+    
+    create_hawkeye_markers(coords, bounce_index, predictive_markers=None)
+    
+    return ball
+
+
+
+create_drs_system(points, frames_per_point, red)
+
+def create_predictive_drs(release_point, bounce_point, pad_point, start_frame, speed_mph=145, num_points=30, friction_factor=0.95, restitution=0.55, color=(0.0, 0.2, 0.6), is_full_toss=False, stumps_y=-10.06):
+    """
+    Create a predictive DRS path by fitting polynomial curves to the actual
+    observed ball path and extrapolating them to the stumps.
+
+    Instead of physics (velocity reconstruction), this fits independent
+    degree-2 polynomials  x(y)  and  z(y)  through the post-bounce tracked
+    points, then samples those polynomials beyond the pad point all the way
+    to stumps_y.  The curve naturally continues the shape of the real path —
+    swing curves outward, seam movement continues, height trend is preserved.
+
+    Uses all points from the bounce onward (post-bounce phase) for the fit.
+    Falls back to all points if no bounce is detected.
+    """
+
+    # ------------------------------------------------------------------
+    # 1. Collect post-bounce points and take only the LAST few near the pad
+    # ------------------------------------------------------------------
+    # Using all post-bounce points causes the fitted parabola to over-curve
+    # downward when extrapolated, hitting z=0 early and making the ball
+    # appear to roll along the floor.
+    # Instead we use only the last N_FIT points before the pad — these
+    # capture the ball's *current* trajectory direction accurately.
+
+    N_FIT = 6   # number of recent points to fit (tune: more = smoother, fewer = more local)
+
+    bounce_y = bounce_point[1]
+    post_bounce_pts = [pt for pt in points if pt[1] <= bounce_y]
+
+    # Fall back to full list if not enough post-bounce points
+    if len(post_bounce_pts) < 3:
+        post_bounce_pts = list(points)
+
+    # Take the last N_FIT points (closest to pad — most representative of
+    # where the ball is actually heading right now)
+    fit_pts = post_bounce_pts[-N_FIT:] if len(post_bounce_pts) >= N_FIT else post_bounce_pts
+
+    # ------------------------------------------------------------------
+    # 2. Fit polynomials through the selected points
+    #    x(y) — quadratic: captures lateral swing/seam deviation
+    #    z(y) — LINEAR   : avoids the sharp downward curl that comes from
+    #                       a quadratic fit extrapolated past the pad
+    # ------------------------------------------------------------------
+    ys = np.array([p[1] for p in fit_pts])
+    xs = np.array([p[0] for p in fit_pts])
+    zs = np.array([p[2] for p in fit_pts])
+
+    x_deg    = min(2, len(fit_pts) - 1)
+    x_coeffs = np.polyfit(ys, xs, x_deg)   # quadratic lateral
+    z_coeffs = np.polyfit(ys, zs, 1)       # LINEAR height — safe extrapolation
+
+    # ------------------------------------------------------------------
+    # 3. Sample from pad to stumps, clamping z only if genuinely negative
+    # ------------------------------------------------------------------
+    pad_y    = pad_point[1]
+    y_values = np.linspace(pad_y, stumps_y, num_points)
+
+    predictive_points = []
+    for y in y_values:
+        x = float(np.polyval(x_coeffs, y))
+        z = float(np.polyval(z_coeffs, y))
+        # Only clamp if z is unrealistically below pitch (> 5 cm underground)
+        # — small negative values are a fit artefact and look fine visually
+        z = max(-0.02, z)
+        predictive_points.append((x, float(y), z))
+
+    # Pin last point exactly on the stump line
+    x_stump = float(np.polyval(x_coeffs, stumps_y))
+    z_stump = float(np.polyval(z_coeffs, stumps_y))
+    predictive_points[-1] = (x_stump, stumps_y, max(0.0, z_stump))
+    
+    # Rest of the function remains the same (curve creation, material, etc.)
+    # ... [keep all the existing curve creation and material code]
+    
+    # Create the predictive DRS path (no bounces in prediction)
+    pred_curve_name = 'Predictive_DRS_Path'
+    
+    # Remove old predictive curve if it exists
+    if pred_curve_name in bpy.data.curves:
+        old_curve = bpy.data.curves[pred_curve_name]
+        bpy.data.curves.remove(old_curve)
+    
+    # Create new curve
+    curve_data = bpy.data.curves.new(pred_curve_name, type='CURVE')
+    curve_data.dimensions = '3D'
+    curve_data.resolution_u = 64
+    
+    spline = curve_data.splines.new('BEZIER')
+    spline.bezier_points.add(len(predictive_points) - 1)
+    
+    for i, coord in enumerate(predictive_points):
+        p = spline.bezier_points[i]
+        p.co = coord
+        p.handle_left_type = 'AUTO'
+        p.handle_right_type = 'AUTO'
+    
+    # Link to scene
+    obj = bpy.data.objects.new('Predictive_DRS', curve_data)
+    bpy.context.collection.objects.link(obj)
+    obj.data.bevel_depth = 0.02
+    
+    # Create material with custom color
+    mat_name = "Predictive_DRS_Material"
+    if mat_name in bpy.data.materials:
+        mat = bpy.data.materials[mat_name]
+    else:
+        mat = bpy.data.materials.new(name=mat_name)
+    
+    mat.use_nodes = True
+    obj.data.materials.append(mat)
+    
+    nodes = mat.node_tree.nodes
+    links = mat.node_tree.links
+    nodes.clear()
+    
+    output_node = nodes.new(type='ShaderNodeOutputMaterial')
+    bsdf_node = nodes.new(type='ShaderNodeBsdfPrincipled')
+    
+    output_node.location = (300, 0)
+    bsdf_node.location = (0, 0)
+    
+    # Set color from parameter
+    bsdf_node.inputs['Base Color'].default_value = (color[0], color[1], color[2], 1.0)
+    bsdf_node.inputs['Alpha'].default_value = 0.6
+    bsdf_node.inputs['Roughness'].default_value = 0.3
+    
+    links.new(bsdf_node.outputs['BSDF'], output_node.inputs['Surface'])
+    
+    mat.blend_method = 'BLEND'
+    try:
+        mat.shadow_method = 'NONE'
+    except AttributeError:
+        pass
+    
+    obj.show_transparent = True
+    obj.visible_shadow = False
+    
+    # Initially hide the predictive path
+    obj.hide_viewport = True
+    obj.hide_render = True
+    obj.keyframe_insert(data_path="hide_viewport", frame=start_frame - 1)
+    obj.keyframe_insert(data_path="hide_render", frame=start_frame - 1)
+    
+    # Show at start_frame
+    obj.hide_viewport = False
+    obj.hide_render = False
+    obj.keyframe_insert(data_path="hide_viewport", frame=start_frame)
+    obj.keyframe_insert(data_path="hide_render", frame=start_frame)
+    
+   # Add Build modifier for animation
+    build_mod = obj.modifiers.new(name="Build", type='BUILD')
+    build_mod.frame_start = start_frame
+    build_mod.frame_duration = len(predictive_points)-1  # Match number of points exactly
+    
+    # Animate cricket ball along predictive path
+    if "CricketBall" in bpy.data.objects:
+        ball = bpy.data.objects["CricketBall"]
+        
+        # Animate ball through predictive points
+        # Each point corresponds to one frame, matching the original path timing
+        for i, pos in enumerate(predictive_points):
+            frame = start_frame + i
+            ball.location = pos
+            ball.keyframe_insert(data_path="location", frame=frame)
+    
+    # Create Hawkeye marker at end of predictive path (stumps)
+    # Calculate marker info for end point
+    end_point = predictive_points[-1]
+    end_frame = start_frame + len(predictive_points) - 1
+    predictive_marker_info = [(end_point, end_frame, color)]
+    
+    return obj, predictive_points, predictive_marker_info
+
+
+# Usage example - add to your main code:
+# After the main DRS animation finishes, create predictive path
+
+# Example points (you'll get these from your actual data)
+release_point = points[0]  # First point
+bounce_point = points[bounce_index[0]] if bounce_index else points[len(points)//2]  # Bounce point
+pad_point = points[-1]  # Where ball hit the pad (last point)
+
+# Start prediction after main animation ends
+prediction_start_frame = len(points)+1 # 10 frames after main animation
+
+is_full_toss = len(bounce_index) == 0 or all(points[i][2] > 0.01 for i in bounce_index)
+
+predictive_obj, pred_points, pred_marker_info = create_predictive_drs(
+    release_point, 
+    bounce_point, 
+    pad_point, 
+    prediction_start_frame,
+    speed_mph=speed_mph,
+    friction_factor=friction_factor,
+    restitution=restitution,
+    stumps_y=bat_stumps_ball,
+    num_points=num_points,
+    is_full_toss=is_full_toss,
+)
+
+create_hawkeye_markers(points, bounce_index, predictive_markers=pred_marker_info)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# STUMP HIT DETECTION & VERDICT DISPLAY
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Stump geometry constants
+OFF_STUMP_X   =  0.1135   # off stump (right side, looking from bowler)
+LEG_STUMP_X   = -0.1135   # leg stump
+STUMP_TOP_Z   =  0.7112   # top of stumps
+BAIL_TOP_Z    =  0.7239   # top of bails (maximum height to be "hitting")
+DRS_MARGIN_X  =  0.0025   # ±2.5 mm tracking error (Umpire's Call lateral)
+DRS_MARGIN_Z  =  0.005    # ±5 mm tracking error (Umpire's Call height)
+
+def check_stump_hit(pred_points, stumps_y):
+    """
+    Examine the final predicted point (pinned to stumps_y) to determine
+    whether the ball would have hit the stumps.
+
+    Returns one of:
+        "OUT"           – clearly hitting (within stump width and below bail top)
+        "UMPIRES CALL"  – clipping the edge within DRS margin
+        "NOT OUT"       – missing
+    and a tuple (x_at_stumps, z_at_stumps).
+    """
+    stump_pt = min(pred_points, key=lambda p: abs(p[1] - stumps_y))
+    x, _, z = stump_pt
+
+    hitting_x = (LEG_STUMP_X - DRS_MARGIN_X) <= x <= (OFF_STUMP_X + DRS_MARGIN_X)
+    hitting_z = z <= (BAIL_TOP_Z + DRS_MARGIN_Z) and z >= -0.02
+
+    umpires_call_x = (
+        abs(x - OFF_STUMP_X) <= DRS_MARGIN_X or
+        abs(x - LEG_STUMP_X) <= DRS_MARGIN_X
+    )
+    umpires_call_z = abs(z - BAIL_TOP_Z) <= DRS_MARGIN_Z
+
+    if hitting_x and hitting_z:
+        if umpires_call_x or umpires_call_z:
+            return "UMPIRES CALL", (x, z)
+        return "OUT", (x, z)
+    return "NOT OUT", (x, z)
+
+
+def check_pitching_inline(bounce_pt):
+    """
+    Was the ball's pitch (bounce) between off and leg stump lines?
+
+    DRS rule: if the ball pitches outside leg stump the umpire cannot
+    give OUT regardless of impact or trajectory.
+    Returns: "OUTSIDE LEG", "INLINE", or "OUTSIDE OFF"
+    """
+    x = bounce_pt[0]
+    if x < LEG_STUMP_X - DRS_MARGIN_X:
+        return "OUTSIDE LEG"
+    if x > OFF_STUMP_X + DRS_MARGIN_X:
+        return "OUTSIDE OFF"
+    return "INLINE"
+
+
+def check_impact_inline(pad_pt):
+    """
+    Did the ball hit the pad between the off and leg stump lines?
+
+    DRS rule: impact outside off stump → NOT OUT.
+    Returns: "OUTSIDE LEG", "INLINE", or "OUTSIDE OFF"
+    """
+    x = pad_pt[0]
+    if x < LEG_STUMP_X - DRS_MARGIN_X:
+        return "OUTSIDE LEG"
+    if x > OFF_STUMP_X + DRS_MARGIN_X:
+        return "OUTSIDE OFF"
+    return "INLINE"
+
+
+def lbw_final_verdict(pitch_result, impact_result, wickets_result):
+    """
+    Apply the actual LBW / DRS decision tree.
+
+      1. Pitched outside leg            → NOT OUT  (cannot be out)
+      2. Impact outside off stump       → NOT OUT
+      3. Both inline + hitting wickets  → OUT / UMPIRES CALL
+      4. Otherwise                      → NOT OUT
+    """
+    if pitch_result == "OUTSIDE LEG":
+        return "NOT OUT"
+    if impact_result == "OUTSIDE OFF":
+        return "NOT OUT"
+    if wickets_result in ("OUT", "UMPIRES CALL"):
+        return wickets_result
+    return "NOT OUT"
+
+
+# ── helpers for building the on-screen breakdown panels ──────────────────────
+
+def _inline_label(result):
+    """Convert an inline check result to a short display string."""
+    if result == "INLINE":
+        return "IN LINE"
+    if result == "OUTSIDE LEG":
+        return "OUTSIDE LEG"
+    return "OUTSIDE OFF"
+
+
+def _inline_color(result):
+    if result == "INLINE":
+        return  (1.0, 0.08, 0.08, 1.0)   # red  → good for OUT
+    return (0.05, 0.85, 0.12, 1.0)   
+
+def _pitching_color(result):
+    if result == "OUTSIDE OFF":
+        return  (1.0, 0.08, 0.08, 1.0)   # red  → good for OUT
+    return (0.05, 0.85, 0.12, 1.0)        # green    → not inline
+
+
+def _wickets_color(result):
+    if result == "OUT":
+        return (1.0, 0.08, 0.08, 1.0)
+    if result == "UMPIRES CALL":
+        return (1.0, 0.55, 0.0, 1.0)
+    return (0.05, 0.85, 0.12, 1.0)
+
+
+def _make_panel_text(name, body, location, rotation_z_deg, size, color, emit,
+                     appear_frame):
+    """
+    Create a single glowing text object that fades in (scale-pop) at appear_frame.
+    Shared by both the label row and the value row.
+    """
+    # Remove stale copy
+    for obj in list(bpy.data.objects):
+        if obj.name == name:
+            bpy.data.objects.remove(obj, do_unlink=True)
+    for blk in list(bpy.data.curves):
+        if blk.name == name:
+            bpy.data.curves.remove(blk)
+
+    bpy.ops.object.text_add(location=location)
+    obj = bpy.context.active_object
+    obj.name = name
+    obj.data.name = name
+    obj.data.body     = body
+    obj.data.size     = size
+    obj.data.align_x  = 'CENTER'
+    obj.data.align_y  = 'CENTER'
+    obj.data.extrude  = 0.008
+    obj.rotation_euler = (math.radians(90), 0, math.radians(rotation_z_deg))
+
+    # material
+    mat = bpy.data.materials.new(name=name + "_Mat")
+    mat.use_nodes = True
+    obj.data.materials.append(mat)
+    nodes = mat.node_tree.nodes
+    links = mat.node_tree.links
+    nodes.clear()
+    out  = nodes.new('ShaderNodeOutputMaterial')
+    mix  = nodes.new('ShaderNodeMixShader')
+    emit_node = nodes.new('ShaderNodeEmission')
+    diff_node = nodes.new('ShaderNodeBsdfDiffuse')
+    emit_node.inputs['Color'].default_value    = color
+    emit_node.inputs['Strength'].default_value = emit
+    diff_node.inputs['Color'].default_value    = color
+    mix.inputs['Fac'].default_value = 0.65
+    links.new(diff_node.outputs['BSDF'],     mix.inputs[1])
+    links.new(emit_node.outputs['Emission'], mix.inputs[2])
+    links.new(mix.outputs['Shader'],         out.inputs['Surface'])
+    obj.visible_shadow = False
+
+    # hide before appear_frame, visible from appear_frame
+    obj.hide_viewport = True
+    obj.hide_render   = True
+    obj.keyframe_insert(data_path="hide_viewport", frame=appear_frame - 1)
+    obj.keyframe_insert(data_path="hide_render",   frame=appear_frame - 1)
+    obj.hide_viewport = False
+    obj.hide_render   = False
+    obj.keyframe_insert(data_path="hide_viewport", frame=appear_frame)
+    obj.keyframe_insert(data_path="hide_render",   frame=appear_frame)
+
+    # scale-pop animation
+    obj.scale = (0.01, 0.01, 0.01)
+    obj.keyframe_insert(data_path="scale", frame=appear_frame)
+    obj.scale = (1.0, 1.0, 1.0)
+    obj.keyframe_insert(data_path="scale", frame=appear_frame + 6)
+
+    return obj
+
+
+def create_drs_breakdown(bounce_pt, pad_pt, pred_points, stumps_y, base_frame,
+                         gap_frames=14):
+    """
+    Build the three pre-verdict DRS breakdown panels (shown sequentially):
+
+        Frame  base_frame + 0   →  PITCHING  label + result
+        Frame  base_frame + gap →  IMPACT    label + result
+        Frame  base_frame + 2*gap → WICKETS  label + result
+
+    Each panel is two text objects: a small white category label above
+    a larger coloured result value below it.
+
+    Returns the frame at which all three panels are visible (base_frame + 2*gap + 6).
+    """
+
+    # ── compute the three checks ──────────────────────────────────────────────
+    pitch_result   = check_pitching_inline(bounce_pt)
+    impact_result  = check_impact_inline(pad_pt)
+    _, (x_hit, z_hit) = check_stump_hit(pred_points, stumps_y)
+    wickets_result = lbw_final_verdict(
+        pitch_result, impact_result,
+        check_stump_hit(pred_points, stumps_y)[0]
+    )
+    # raw wickets hitting result (before LBW tree) for the panel colour
+    wickets_raw    = check_stump_hit(pred_points, stumps_y)[0]
+
+    # ── layout: stacked column, pulled well off the pitch ────────────────────
+    # X = 3.5 m off-centre (off-side) so the panels sit clear of the pitch
+    # Y = 1.5 m in front of the stumps (toward the bowler) so the camera
+    #     can frame them with the stumps slightly behind
+    # Text faces the DRS_Panel_Cam which sits at X=+6, Y=stumps_y+2, Z=1.5
+    panel_x   =  3.5
+    panel_y   =  stumps_y + 1.5
+    rot_z     = -50.0   # angle to face the DRS panel camera
+
+    label_size  = 0.18
+    value_size  = 0.30
+    label_color = (0.85, 0.85, 0.85, 1.0)   # neutral white-ish
+    label_emit  = 2.5
+
+    panels = [
+        # (category, value_str, value_color, z_label, z_value, frame_offset)
+        (
+            "PITCHING",
+            _inline_label(pitch_result),
+            _pitching_color(pitch_result),
+            2.10, 1.82,
+            0
+        ),
+        (
+            "IMPACT",
+            _inline_label(impact_result),
+            _inline_color(impact_result),
+            1.55, 1.27,
+            gap_frames
+        ),
+        (
+            "WICKETS HITTING",
+            wickets_raw,
+            _wickets_color(wickets_raw),
+            1.00, 0.72,
+            gap_frames * 2
+        ),
+    ]
+
+    for cat, val, val_color, z_lbl, z_val, t_offset in panels:
+        appear = base_frame + t_offset
+
+        _make_panel_text(
+            name        = f"DRS_Label_{cat.replace(' ', '_')}",
+            body        = cat,
+            location    = (panel_x, panel_y, z_lbl),
+            rotation_z_deg = rot_z,
+            size        = label_size,
+            color       = label_color,
+            emit        = label_emit,
+            appear_frame = appear,
+        )
+        _make_panel_text(
+            name        = f"DRS_Value_{cat.replace(' ', '_')}",
+            body        = val,
+            location    = (panel_x, panel_y, z_val),
+            rotation_z_deg = rot_z,
+            size        = value_size,
+            color       = val_color,
+            emit        = 5.0,
+            appear_frame = appear + 3,   # value pops in 3 frames after label
+        )
+
+    all_visible_frame = base_frame + gap_frames * 2 + 9
+    print(f"[DRS] Pitching  : {pitch_result}")
+    print(f"[DRS] Impact    : {impact_result}")
+    print(f"[DRS] Wickets   : {wickets_raw}")
+    return all_visible_frame
+
+
+def create_verdict_text(verdict, pred_points, stumps_y, verdict_frame):
+    """
+    Create a 3-D text object showing the DRS verdict.
+
+    Positioned to the off-side of the batters end, angled so it reads
+    naturally when viewed from a side-on or slightly elevated camera.
+    The text pops in at verdict_frame (after the predictive path finishes).
+
+    Colors:
+        OUT          → red   (1, 0.1, 0.1)
+        UMPIRES CALL → amber (1, 0.6, 0)
+        NOT OUT      → green (0.05, 0.8, 0.1)
+    """
+
+    # Remove old verdict text if re-running
+    for obj in list(bpy.data.objects):
+        if obj.name.startswith("DRS_Verdict"):
+            bpy.data.objects.remove(obj, do_unlink=True)
+    for blk in list(bpy.data.curves):
+        if blk.name.startswith("DRS_Verdict"):
+            bpy.data.curves.remove(blk)
+
+    # ── colour ──────────────────────────────────────────────────────────────
+    if verdict == "OUT":
+        color = (1.0, 0.08, 0.08, 1.0)
+        emit  = 6.0
+    elif verdict == "UMPIRES CALL":
+        color = (1.0, 0.55, 0.0, 1.0)
+        emit  = 5.0
+    else:
+        color = (0.05, 0.85, 0.12, 1.0)
+        emit  = 5.0
+
+    # ── position ────────────────────────────────────────────────────────────
+    # Match the panel positions: pulled off-side (X=3.5), in front of stumps
+    # The verdict sits above the three panels, centred vertically
+    text_x   =  3.5
+    text_y   =  stumps_y + 1.5
+    text_z   =  2.55         # above the three stacked panels
+    text_loc =  (text_x, text_y, text_z)
+
+    # ── create text curve ────────────────────────────────────────────────────
+    bpy.ops.object.text_add(location=text_loc)
+    txt_obj        = bpy.context.active_object
+    txt_obj.name   = "DRS_Verdict"
+    txt_obj.data.name = "DRS_Verdict_Curve"
+    txt_obj.data.body = verdict
+
+    # Font size and alignment
+    txt_obj.data.size          = 0.40
+    txt_obj.data.align_x       = 'CENTER'
+    txt_obj.data.align_y       = 'CENTER'
+    txt_obj.data.extrude       = 0.015   # slight 3-D depth
+    txt_obj.data.bevel_depth   = 0.003
+
+    # Face the DRS_Panel_Cam (same angle as the breakdown panels)
+    txt_obj.rotation_euler = (math.radians(90), 0, math.radians(-50))
+
+    # ── emissive material ────────────────────────────────────────────────────
+    mat = bpy.data.materials.new(name="DRS_Verdict_Mat")
+    mat.use_nodes = True
+    txt_obj.data.materials.append(mat)
+
+    nodes = mat.node_tree.nodes
+    links = mat.node_tree.links
+    nodes.clear()
+
+    out_node  = nodes.new('ShaderNodeOutputMaterial')
+    mix_node  = nodes.new('ShaderNodeMixShader')
+    emit_node = nodes.new('ShaderNodeEmission')
+    diff_node = nodes.new('ShaderNodeBsdfDiffuse')
+
+    emit_node.inputs['Color'].default_value    = color
+    emit_node.inputs['Strength'].default_value = emit
+    diff_node.inputs['Color'].default_value    = color
+    mix_node.inputs['Fac'].default_value       = 0.6   # 60% emission, 40% diffuse
+
+    links.new(diff_node.outputs['BSDF'],     mix_node.inputs[1])
+    links.new(emit_node.outputs['Emission'], mix_node.inputs[2])
+    links.new(mix_node.outputs['Shader'],    out_node.inputs['Surface'])
+
+    txt_obj.visible_shadow = False
+
+    # ── animate: hidden before verdict_frame, visible from verdict_frame on ──
+    txt_obj.hide_viewport = True
+    txt_obj.hide_render   = True
+    txt_obj.keyframe_insert(data_path="hide_viewport", frame=verdict_frame - 1)
+    txt_obj.keyframe_insert(data_path="hide_render",   frame=verdict_frame - 1)
+
+    txt_obj.hide_viewport = False
+    txt_obj.hide_render   = False
+    txt_obj.keyframe_insert(data_path="hide_viewport", frame=verdict_frame)
+    txt_obj.keyframe_insert(data_path="hide_render",   frame=verdict_frame)
+
+    # ── scale-in animation (starts tiny, grows to full size) ─────────────────
+    txt_obj.scale = (0.01, 0.01, 0.01)
+    txt_obj.keyframe_insert(data_path="scale", frame=verdict_frame)
+    txt_obj.scale = (1.0, 1.0, 1.0)
+    txt_obj.keyframe_insert(data_path="scale", frame=verdict_frame + 8)
+
+    # Make the scale interpolation smooth (ease-out)
+    if txt_obj.animation_data and txt_obj.animation_data.action:
+        action = txt_obj.animation_data.action
+        # Blender 4.x stores fcurves on action.layers[0].strips[0].channelbag
+        # Blender 3.x stores them directly on action.fcurves
+        try:
+            fcurves = action.fcurves
+        except AttributeError:
+            try:
+                fcurves = action.layers[0].strips[0].channelbag(txt_obj).fcurves
+            except Exception:
+                fcurves = []
+        for fcurve in fcurves:
+            if 'scale' in fcurve.data_path:
+                for kp in fcurve.keyframe_points:
+                    kp.interpolation = 'BACK'
+
+    return txt_obj, verdict
+
+
+# ── Run detection & display ──────────────────────────────────────────────────
+
+# Breakdown panels start 4 frames after the predictive path finishes drawing
+breakdown_start = prediction_start_frame + len(pred_points) + 4
+
+# Show PITCHING → IMPACT → WICKETS HITTING, each 14 frames apart
+all_panels_done = create_drs_breakdown(
+    bounce_pt  = bounce_point,
+    pad_pt     = pad_point,
+    pred_points = pred_points,
+    stumps_y   = bat_stumps_ball,
+    base_frame = breakdown_start,
+    gap_frames = 14,
+)
+
+# Final verdict pops in 8 frames after the last panel is fully visible
+verdict_frame = all_panels_done + 8
+
+# Determine overall verdict using LBW rules
+pitch_result  = check_pitching_inline(bounce_point)
+impact_result = check_impact_inline(pad_point)
+wickets_raw, (x_hit, z_hit) = check_stump_hit(pred_points, bat_stumps_ball)
+verdict = lbw_final_verdict(pitch_result, impact_result, wickets_raw)
+
+verdict_obj, _ = create_verdict_text(verdict, pred_points, bat_stumps_ball, verdict_frame)
+
+print(f"[DRS] Ball position at stumps  →  x={x_hit:.4f} m   z={z_hit:.4f} m")
+print(f"[DRS] Stump window  →  x=[{LEG_STUMP_X:.4f}, {OFF_STUMP_X:.4f}]   z=[0.00, {BAIL_TOP_Z:.4f}]")
+print(f"[DRS] VERDICT: {verdict}")
+
+# ─────────────────────────────────────────────────────────────────────────────
+# DRS PANEL CAMERA  +  CAMERA SWITCHING
+# ─────────────────────────────────────────────────────────────────────────────
+
+def create_drs_panel_camera(stumps_y):
+    """
+    Create (or replace) a dedicated camera that frames the off-side DRS panels
+    and the batting stumps together.
+
+    Position: X=+6.5 m (well off the pitch off-side)
+               Y = stumps_y + 2.0 m (slightly in front of the stumps)
+               Z = 1.8 m (eye level, slightly elevated)
+    Aimed at:  X=3.2, Y=stumps_y+1.2, Z=1.4  (centre of the panel stack)
+    Lens: 50 mm gives a tight, broadcast-style framing.
+    """
+    cam_name = "DRS_Panel_Cam"
+
+    # Remove old copy
+    if cam_name in bpy.data.objects:
+        bpy.data.objects.remove(bpy.data.objects[cam_name], do_unlink=True)
+    for blk in list(bpy.data.cameras):
+        if blk.name == cam_name:
+            bpy.data.cameras.remove(blk)
+
+    cam_data = bpy.data.cameras.new(cam_name)
+    cam_data.lens        = 50          # mm — tight, broadcast feel
+    cam_data.clip_start  = 0.1
+    cam_data.clip_end    = 100.0
+
+    cam_obj = bpy.data.objects.new(cam_name, cam_data)
+    bpy.context.collection.objects.link(cam_obj)
+
+    # Position: off-side, slightly ahead of and above the panels
+    cam_obj.location = (-2, stumps_y - 2.5, 1.5)
+
+    # Point at the centre of the panel stack
+    target = (3.2, stumps_y + 1.2, 1.4)
+    dx = target[0] - cam_obj.location[0]
+    dy = target[1] - cam_obj.location[1]
+    dz = target[2] - cam_obj.location[2]
+    dist_h = math.sqrt(dx**2 + dy**2)
+    cam_obj.rotation_euler = (
+        math.pi / 2 - math.atan2(dz, dist_h),   # tilt down
+        0.0,
+        math.atan2(dx, -dy) + math.pi,           # yaw toward target
+    )
+
+    return cam_obj
+
+
+drs_panel_cam = create_drs_panel_camera(bat_stumps_ball)
+
+# ── timeline markers for camera switching ────────────────────────────────────
+scene = bpy.context.scene
+scene.timeline_markers.clear()
+
+# Phase 1  (frame 0):               main DRS path plays (existing Camera)
+# Phase 2  (breakdown_start):       cut to DRS_Panel_Cam — panels build up
+# Phase 3  (verdict_frame + 10):    stay on DRS_Panel_Cam for the verdict
+# (no cut away — verdict sits above the panels in the same frame)
+
+def _bind_cam(name, frame):
+    """Add a timeline marker that binds camera <name> at <frame>."""
+    m = scene.timeline_markers.new(name + "_Marker", frame=frame)
+    if name in bpy.data.objects:
+        m.camera = bpy.data.objects[name]
+    return m
+
+# Existing umpire / overview camera (must exist in the scene already)
+_bind_cam("Camera", 0)
+
+# Cut to DRS panel camera when the breakdown panels start appearing
+_bind_cam("DRS_Panel_Cam", breakdown_start - 2)
+
+# Scene end: give a few extra seconds after the verdict
+scene_end = verdict_frame + 40
+scene.frame_start = 0
+scene.frame_end   = scene_end
+scene.camera      = bpy.data.objects['Camera']   # start on main camera
+
+print(f"[DRS] Timeline: ball 0–{prediction_start_frame}  |  "
+      f"prediction {prediction_start_frame}–{breakdown_start}  |  "
+      f"panels {breakdown_start}–{verdict_frame}  |  "
+      f"verdict {verdict_frame}–{scene_end}")
+
+#import bpy
+import os
+import re
+
+def auto_version_render(scene):
+    path = bpy.path.abspath(scene.render.filepath)
+    directory = os.path.dirname(path)
+    filename = os.path.basename(path)
+
+    name, ext = os.path.splitext(filename)
+
+    # Look for existing versions
+    existing = []
+    for f in os.listdir(directory):
+        match = re.match(rf"{re.escape(name)}_v(\d+){re.escape(ext)}", f)
+        if match:
+            existing.append(int(match.group(1)))
+
+    next_version = max(existing) + 1 if existing else 1
+    new_name = f"{name}_v{next_version:03d}{ext}"
+
+    scene.render.filepath = os.path.join(directory, new_name)
+
+bpy.app.handlers.render_pre.clear()
+bpy.app.handlers.render_pre.append(auto_version_render)
+
+# Calculate marker info for end point
+#    end_point = predictive_points[-1]
+#    end_frame = start_frame + len(predictive_points) - 1
+#    predictive_marker_info = [(end_point, end_frame, color)]
+#    
+#    return obj, predictive_points, predictive_marker_info
