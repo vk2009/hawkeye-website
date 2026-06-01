@@ -1,0 +1,760 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hawkeye DRS — Cornerstone Project</title>
+  <style>
+    :root {
+      --bg: #0a0e1a;
+      --surface: #111827;
+      --card: #1a2235;
+      --border: #2a3550;
+      --accent: #3b82f6;
+      --accent2: #60a5fa;
+      --accent3: #93c5fd;
+      --green: #22c55e;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --heading: #f1f5f9;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      line-height: 1.7;
+    }
+
+    /* NAV */
+    nav {
+      position: fixed;
+      top: 0;
+      width: 100%;
+      background: rgba(10, 14, 26, 0.92);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      z-index: 100;
+      padding: 0 2rem;
+    }
+
+    nav ul {
+      display: flex;
+      list-style: none;
+      gap: 0.25rem;
+      align-items: center;
+      height: 56px;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    nav a {
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 0.85rem;
+      font-weight: 500;
+      padding: 0.4rem 0.8rem;
+      border-radius: 6px;
+      transition: color 0.2s, background 0.2s;
+      letter-spacing: 0.02em;
+    }
+
+    nav a:hover, nav a.active {
+      color: var(--accent2);
+      background: rgba(59, 130, 246, 0.1);
+    }
+
+    nav .logo {
+      margin-right: auto;
+      color: var(--heading) !important;
+      font-size: 1rem !important;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+    }
+
+    nav .logo span { color: var(--accent); }
+
+    /* HERO */
+    #hero {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 6rem 2rem 4rem;
+      position: relative;
+      overflow: hidden;
+    }
+
+    #hero::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 80% 50% at 50% 0%, rgba(59,130,246,0.15) 0%, transparent 70%),
+        radial-gradient(ellipse 60% 40% at 80% 80%, rgba(34,197,94,0.08) 0%, transparent 60%);
+      pointer-events: none;
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: rgba(59,130,246,0.12);
+      border: 1px solid rgba(59,130,246,0.3);
+      color: var(--accent2);
+      font-size: 0.78rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 0.35rem 1rem;
+      border-radius: 100px;
+      margin-bottom: 1.5rem;
+    }
+
+    .hero-badge::before {
+      content: '';
+      width: 6px; height: 6px;
+      background: var(--green);
+      border-radius: 50%;
+      box-shadow: 0 0 8px var(--green);
+    }
+
+    #hero h1 {
+      font-size: clamp(2.5rem, 7vw, 5rem);
+      font-weight: 800;
+      color: var(--heading);
+      line-height: 1.1;
+      letter-spacing: -0.02em;
+      margin-bottom: 0.5rem;
+    }
+
+    #hero h1 span { color: var(--accent); }
+
+    .hero-sub {
+      font-size: clamp(1rem, 2.5vw, 1.3rem);
+      color: var(--muted);
+      max-width: 580px;
+      margin: 1rem auto 2.5rem;
+    }
+
+    .hero-ctas {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.7rem 1.6rem;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      text-decoration: none;
+      transition: all 0.2s;
+      cursor: pointer;
+      border: none;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    .btn-primary:hover { background: #2563eb; transform: translateY(-1px); }
+
+    .btn-outline {
+      background: transparent;
+      color: var(--accent2);
+      border: 1px solid var(--border);
+    }
+
+    .btn-outline:hover { border-color: var(--accent); background: rgba(59,130,246,0.08); }
+
+    .hero-stats {
+      display: flex;
+      gap: 3rem;
+      margin-top: 4rem;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .stat { text-align: center; }
+    .stat-val { font-size: 2rem; font-weight: 800; color: var(--heading); }
+    .stat-val span { color: var(--accent); }
+    .stat-label { font-size: 0.8rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+
+    .scroll-hint {
+      position: absolute;
+      bottom: 2rem;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.4rem;
+      color: var(--muted);
+      font-size: 0.75rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      opacity: 0.6;
+      animation: bounce 2s infinite;
+    }
+
+    .scroll-hint svg { width: 16px; height: 16px; }
+
+    @keyframes bounce {
+      0%, 100% { transform: translateX(-50%) translateY(0); }
+      50% { transform: translateX(-50%) translateY(6px); }
+    }
+
+    /* SECTIONS */
+    section { padding: 5rem 2rem; max-width: 900px; margin: 0 auto; }
+
+    .section-label {
+      display: inline-block;
+      color: var(--accent);
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      margin-bottom: 0.75rem;
+    }
+
+    h2 {
+      font-size: clamp(1.6rem, 4vw, 2.4rem);
+      font-weight: 800;
+      color: var(--heading);
+      line-height: 1.2;
+      margin-bottom: 1.5rem;
+      letter-spacing: -0.02em;
+    }
+
+    p { color: var(--text); margin-bottom: 1.2rem; }
+
+    /* DIVIDER */
+    .divider {
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--border) 30%, var(--border) 70%, transparent);
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    /* CARDS */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-top: 1.5rem;
+    }
+
+    .card-icon {
+      width: 44px; height: 44px;
+      border-radius: 10px;
+      background: rgba(59,130,246,0.12);
+      border: 1px solid rgba(59,130,246,0.25);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.2rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .card h3 {
+      color: var(--heading);
+      font-size: 1rem;
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+    }
+
+    .card p { font-size: 0.92rem; color: var(--muted); margin: 0; }
+
+    .cards-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 1rem;
+      margin-top: 1.5rem;
+    }
+
+    /* HIGHLIGHT BOX */
+    .highlight {
+      background: linear-gradient(135deg, rgba(59,130,246,0.08), rgba(34,197,94,0.06));
+      border: 1px solid rgba(59,130,246,0.2);
+      border-left: 3px solid var(--accent);
+      border-radius: 8px;
+      padding: 1.25rem 1.5rem;
+      margin: 1.5rem 0;
+    }
+
+    .highlight-label {
+      color: var(--accent2);
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-bottom: 0.5rem;
+    }
+
+    .highlight p { color: var(--text); font-size: 1.05rem; font-style: italic; margin: 0; }
+
+    /* PROCESS STEPS */
+    .steps { margin-top: 2rem; }
+
+    .step {
+      display: flex;
+      gap: 1.25rem;
+      margin-bottom: 1.75rem;
+      align-items: flex-start;
+    }
+
+    .step-num {
+      flex-shrink: 0;
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      background: var(--accent);
+      color: #fff;
+      font-size: 0.85rem;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-top: 0.1rem;
+    }
+
+    .step-body h3 { color: var(--heading); font-size: 1rem; font-weight: 700; margin-bottom: 0.3rem; }
+    .step-body p { color: var(--muted); font-size: 0.92rem; margin: 0; }
+
+    /* IMAGE GALLERY */
+    .gallery {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 0.75rem;
+      margin-top: 1.5rem;
+    }
+
+    .gallery img {
+      width: 100%;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      aspect-ratio: 4/3;
+      object-fit: cover;
+      transition: transform 0.2s, border-color 0.2s;
+    }
+
+    .gallery img:hover { transform: scale(1.02); border-color: var(--accent); }
+
+    /* VIDEO */
+    .video-wrap {
+      margin-top: 1.5rem;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      background: #000;
+    }
+
+    .video-wrap video {
+      width: 100%;
+      display: block;
+    }
+
+    /* PROPOSAL LINK */
+    .proposal-box {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 2rem;
+      display: flex;
+      align-items: center;
+      gap: 1.5rem;
+      flex-wrap: wrap;
+    }
+
+    .proposal-icon {
+      font-size: 2.5rem;
+      flex-shrink: 0;
+    }
+
+    .proposal-box h3 { color: var(--heading); font-weight: 700; margin-bottom: 0.3rem; }
+    .proposal-box p { color: var(--muted); font-size: 0.9rem; margin: 0 0 1rem; }
+
+    /* CODE SNIPPET */
+    .code-block {
+      background: #0d1117;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.25rem 1.5rem;
+      font-family: 'Fira Code', 'Cascadia Code', monospace;
+      font-size: 0.82rem;
+      color: #e6edf3;
+      overflow-x: auto;
+      margin-top: 1.5rem;
+      line-height: 1.6;
+    }
+
+    .code-block .kw { color: #ff7b72; }
+    .code-block .fn { color: #d2a8ff; }
+    .code-block .str { color: #a5d6ff; }
+    .code-block .cm { color: #8b949e; font-style: italic; }
+    .code-block .num { color: #79c0ff; }
+
+    /* TAGS */
+    .tags { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 1rem; }
+    .tag {
+      background: rgba(59,130,246,0.1);
+      border: 1px solid rgba(59,130,246,0.2);
+      color: var(--accent2);
+      font-size: 0.78rem;
+      font-weight: 600;
+      padding: 0.25rem 0.7rem;
+      border-radius: 100px;
+    }
+
+    /* FOOTER */
+    footer {
+      text-align: center;
+      padding: 3rem 2rem;
+      color: var(--muted);
+      font-size: 0.85rem;
+      border-top: 1px solid var(--border);
+    }
+
+    footer span { color: var(--accent2); }
+
+    /* RESPONSIVE */
+    @media (max-width: 600px) {
+      nav ul { gap: 0; }
+      nav a { font-size: 0.78rem; padding: 0.4rem 0.5rem; }
+      .hero-stats { gap: 2rem; }
+      .proposal-box { flex-direction: column; }
+    }
+
+    /* Active section highlight */
+    .section-anchor { display: block; position: relative; top: -80px; visibility: hidden; }
+  </style>
+</head>
+<body>
+
+<nav>
+  <ul>
+    <li><a href="#hero" class="logo">HAWK<span>EYE</span> DRS</a></li>
+    <li><a href="#proposal">Proposal</a></li>
+    <li><a href="#motivation">Motivation</a></li>
+    <li><a href="#process">Process</a></li>
+    <li><a href="#product">Product</a></li>
+    <li><a href="#reflection">Reflection</a></li>
+  </ul>
+</nav>
+
+<!-- ═══════════════════ HERO ═══════════════════ -->
+<div id="hero">
+  <div class="hero-badge">Cornerstone Project 2025–26</div>
+  <h1>Single-Camera<br /><span>Hawkeye DRS</span></h1>
+  <p class="hero-sub">
+    Bringing professional ball-tracking technology to amateur cricket — so a bad umpire call never decides the game again.
+  </p>
+  <div class="hero-ctas">
+    <a href="#motivation" class="btn btn-primary">Read the Story</a>
+    <a href="#product" class="btn btn-outline">See the Product</a>
+  </div>
+  <div class="hero-stats">
+    <div class="stat"><div class="stat-val">1<span>cam</span></div><div class="stat-label">Single Camera</div></div>
+    <div class="stat"><div class="stat-val">3<span>D</span></div><div class="stat-label">Ball Trajectory</div></div>
+    <div class="stat"><div class="stat-val">LBW</div><div class="stat-label">Decision Review</div></div>
+  </div>
+  <div class="scroll-hint">
+    <span>Scroll</span>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M19 9l-7 7-7-7"/>
+    </svg>
+  </div>
+</div>
+
+<!-- ═══════════════════ PROPOSAL ═══════════════════ -->
+<div class="divider"></div>
+<section id="proposal">
+  <a class="section-anchor" id="proposal-anchor"></a>
+  <div class="section-label">01 — Proposal</div>
+  <h2>Project Proposal</h2>
+  <p>The original proposal outlines the full scope, objectives, timeline, and technical approach for building a single-camera DRS system for amateur cricket leagues.</p>
+
+  <div class="proposal-box">
+    <div class="proposal-icon">📄</div>
+    <div>
+      <h3>Cornerstone Proposal — Hawkeye DRS</h3>
+      <p>Full project proposal including background research, methodology, and success criteria.</p>
+      <a href="proposal.pdf" class="btn btn-primary" target="_blank">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <path d="M12 5v14M5 12l7 7 7-7"/>
+        </svg>
+        Download PDF
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════ MOTIVATION ═══════════════════ -->
+<div class="divider"></div>
+<section id="motivation">
+  <a class="section-anchor" id="motivation-anchor"></a>
+  <div class="section-label">02 — Motivation</div>
+  <h2>Why This Project?</h2>
+
+  <div class="highlight">
+    <div class="highlight-label">Driving Question</div>
+    <p>"Can a single consumer-grade camera replicate the ball-tracking accuracy of professional DRS systems, and make fair decision review accessible for amateur cricket?"</p>
+  </div>
+
+  <p>
+    I have played cricket for as long as I can remember. Whether it was a local club match or a competitive league game, the sport has always been more than just a pastime — it is a community, a discipline, and a source of some of my most vivid memories. But cricket at the amateur level carries a frustration that professionals rarely have to endure: bad umpire decisions that stick.
+  </p>
+  <p>
+    At professional level, the Decision Review System (DRS) exists precisely to solve this problem. Hawkeye cameras, ball-tracking algorithms, and instant replays give both teams a mechanism to challenge incorrect calls. A clear LBW that was given not-out can be overturned in seconds. But for the hundreds of thousands of players competing in club leagues and school tournaments around the world, none of that technology exists. A raised finger is final, no matter how wrong it is.
+  </p>
+  <p>
+    I experienced this personally. In a crucial league match, a clearly missing delivery was given LBW against our best batter, and it cost us the game. There was no recourse, no review, no way to even see what the ball was doing. That moment stuck with me — not out of bitterness, but because it felt <em>solvable</em>. The algorithms behind DRS are not secret. Computer vision has become accessible. Cameras are cheap.
+  </p>
+
+  <div class="cards-grid">
+    <div class="card">
+      <div class="card-icon">🏏</div>
+      <h3>The Problem</h3>
+      <p>Amateur leagues have no access to ball-tracking DRS. Incorrect LBW and catch decisions go unchallenged, unfairly altering match outcomes.</p>
+    </div>
+    <div class="card">
+      <div class="card-icon">💡</div>
+      <h3>The Need</h3>
+      <p>A low-cost, single-camera solution that can be set up at any ground — no broadcast rig, no expensive hardware, no specialist operator required.</p>
+    </div>
+    <div class="card">
+      <div class="card-icon">🎯</div>
+      <h3>The Goal</h3>
+      <p>Reconstruct 3D ball trajectory from 2D footage, predict impact and pitch points, and render a visual review — accessible to every club.</p>
+    </div>
+  </div>
+
+  <p style="margin-top: 1.5rem;">
+    This project sits at the intersection of two things I care deeply about: cricket and computer science. Building Hawkeye DRS from scratch — from the physics engine to the 3D visualisation — felt like the right way to spend a year of serious work, because the outcome would be something genuinely useful to the sport that shaped me.
+  </p>
+</section>
+
+<!-- ═══════════════════ PROCESS ═══════════════════ -->
+<div class="divider"></div>
+<section id="process">
+  <a class="section-anchor" id="process-anchor"></a>
+  <div class="section-label">03 — Process</div>
+  <h2>How I Built It</h2>
+
+  <p>
+    The project unfolded across several distinct phases — each one revealing new challenges that required a step back, more research, and a revised approach. What started as a computer vision task quickly grew into a full pipeline spanning physics simulation, 3D rendering, and real-time tracking.
+  </p>
+
+  <div class="steps">
+
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-body">
+        <h3>Research &amp; Scoping</h3>
+        <p>I started by studying published DRS methodology and academic papers on monocular ball tracking. The key challenge with a single camera is depth — without a second viewpoint, you cannot directly observe the Z-axis. I identified that trajectory extrapolation using known physics (gravity, seam movement) could substitute for a second camera in many scenarios. I scoped the project to focus on LBW review: pitch point, impact point, and wicket prediction.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-body">
+        <h3>Camera Input &amp; Ball Detection</h3>
+        <p>I wrote <code>camera_input.py</code> to handle video ingestion and frame processing. Using OpenCV, I implemented background subtraction and circular Hough transforms to detect the ball in each frame. The detection pipeline had to be robust against pitch markings, fielders, and motion blur at typical amateur video frame rates (30–60 fps).</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-body">
+        <h3>Trajectory Engine</h3>
+        <p>The <code>trajectory_engine.py</code> module takes the 2D pixel coordinates detected across frames and fits a physical trajectory using least-squares regression against a projectile model. Depth is inferred from the apparent size change of the ball as it travels down the pitch. This gave me a reconstructed 3D path that could be extrapolated forward to predict where the ball would have continued had it not hit the pad or bat.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num">4</div>
+      <div class="step-body">
+        <h3>3D Visualisation in Blender</h3>
+        <p>With trajectory data in hand, I built a full cricket pitch scene in Blender and wrote <code>blender.py</code> to programmatically animate a ball object along the computed path. This script runs inside Blender's Python environment, reading trajectory output and driving the ball's keyframes. I iterated through multiple versions (<code>hawkeye2.blend</code>, <code>hawkeye3.blend</code>) to improve camera angle, lighting, and the clarity of the impact and prediction zones.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num">5</div>
+      <div class="step-body">
+        <h3>Rendering &amp; Output</h3>
+        <p>The final pipeline renders a video showing the ball's actual tracked path (solid line) and predicted continuation (dashed line), with visual markers at the pitch point, impact point, and projected wicket contact. I rendered multiple simulation variants to validate the visualisation against known ball paths, checking that pitch point and impact markers were accurate to within acceptable margins.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num">6</div>
+      <div class="step-body">
+        <h3>Testing &amp; Iteration</h3>
+        <p>I tested the system against recorded video of live deliveries, comparing my system's predicted trajectory against the naked-eye observation of where the ball actually went. I tuned the depth-inference model and the trajectory extrapolation window through several rounds of iteration, significantly improving accuracy for balls pitching on a good length.</p>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="code-block">
+<span class="cm"># trajectory_engine.py — core trajectory reconstruction</span>
+<span class="kw">def</span> <span class="fn">fit_trajectory</span>(pixel_coords, frame_timestamps):
+    <span class="cm"># Build observation matrix: x(t), y(t) from detections</span>
+    t = np.array(frame_timestamps)
+    x = np.array([p[<span class="num">0</span>] <span class="kw">for</span> p <span class="kw">in</span> pixel_coords])
+    y = np.array([p[<span class="num">1</span>] <span class="kw">for</span> p <span class="kw">in</span> pixel_coords])
+    <span class="cm"># Fit parabolic model to y(t): y = a*t² + b*t + c  (gravity)</span>
+    coeffs_y = np.polyfit(t, y, <span class="num">2</span>)
+    coeffs_x = np.polyfit(t, x, <span class="num">1</span>)   <span class="cm"># linear in x</span>
+    <span class="kw">return</span> coeffs_x, coeffs_y
+
+<span class="kw">def</span> <span class="fn">predict_wicket_impact</span>(coeffs_x, coeffs_y, stumps_x_pixel):
+    <span class="cm"># Extrapolate forward to stumps plane</span>
+    t_impact = (stumps_x_pixel - coeffs_x[<span class="num">1</span>]) / coeffs_x[<span class="num">0</span>]
+    y_impact = np.polyval(coeffs_y, t_impact)
+    <span class="kw">return</span> t_impact, y_impact
+  </div>
+
+  <p style="margin-top:1.5rem;">
+    Throughout the process I kept a build log and iteratively rendered test simulations. The renders in the <em>Image Renders</em> folder represent key checkpoint moments where I verified the visual output matched the expected trajectory.
+  </p>
+
+  <div class="tags">
+    <span class="tag">Python</span>
+    <span class="tag">OpenCV</span>
+    <span class="tag">NumPy</span>
+    <span class="tag">Blender Python API</span>
+    <span class="tag">Physics Simulation</span>
+    <span class="tag">Computer Vision</span>
+    <span class="tag">3D Rendering</span>
+  </div>
+</section>
+
+<!-- ═══════════════════ PRODUCT ═══════════════════ -->
+<div class="divider"></div>
+<section id="product">
+  <a class="section-anchor" id="product-anchor"></a>
+  <div class="section-label">04 — Product</div>
+  <h2>The Final Product</h2>
+
+  <p>
+    The product is a fully functional ball-tracking and trajectory-visualisation pipeline that takes a single video feed of a cricket delivery and produces a professional-style DRS review output — the kind you see on broadcast TV, built to run on consumer hardware.
+  </p>
+  <p>
+    The system is composed of three integrated components: a detection module that locates the ball in every frame of the video, a trajectory engine that reconstructs the 3D path from 2D observations using physics-based inference, and a Blender rendering pipeline that produces a clear, animated visualisation of the ball's actual path alongside its predicted continuation.
+  </p>
+  <p>
+    The output video shows the ball travelling from release to impact, with a pitch-point marker appearing where the ball first makes contact with the ground, an impact marker at the point it struck the batter's pad or bat, and — critically — a predicted trajectory line showing where the ball would have continued had it not been interrupted. This predicted path is compared against the wicket geometry to determine whether the delivery was hitting the stumps: the core of every LBW decision.
+  </p>
+  <p>
+    The entire system runs from a single camera positioned side-on or from behind the stumps — the standard angles available at any amateur ground. No specialist hardware is required beyond a video camera or smartphone capable of recording at 30fps or higher. The pipeline is open-source and designed to be run from a laptop at the ground's edge.
+  </p>
+
+  <div class="cards-grid">
+    <div class="card">
+      <div class="card-icon">🎥</div>
+      <h3>Input</h3>
+      <p>Any single-camera video of a delivery. Works with smartphone footage at 30fps or above.</p>
+    </div>
+    <div class="card">
+      <div class="card-icon">📐</div>
+      <h3>Processing</h3>
+      <p>Ball detected per frame → 3D trajectory reconstructed → impact & wicket prediction computed.</p>
+    </div>
+    <div class="card">
+      <div class="card-icon">🎬</div>
+      <h3>Output</h3>
+      <p>Rendered Blender animation showing tracked path, pitch point, impact point, and projected line through the stumps.</p>
+    </div>
+  </div>
+
+  <h3 style="color: var(--heading); margin: 2rem 0 0.75rem; font-size: 1.1rem;">Simulation Renders</h3>
+
+  <div class="gallery">
+    <img src="../Image Renders/Simulation_Hawk1.png" alt="Simulation render 1 — ball trajectory overview" onerror="this.style.display='none'" />
+    <img src="../Image Renders/Simulation_Hawk2.png" alt="Simulation render 2 — pitch point marker" onerror="this.style.display='none'" />
+    <img src="../Image Renders/Simulation_Hawk3.png" alt="Simulation render 3 — impact point" onerror="this.style.display='none'" />
+    <img src="../Image Renders/Simulation_Hawk4.png" alt="Simulation render 4 — predicted trajectory" onerror="this.style.display='none'" />
+    <img src="../Image Renders/Simulation_Hawk5.png" alt="Simulation render 5 — wicket prediction" onerror="this.style.display='none'" />
+  </div>
+
+  <h3 style="color: var(--heading); margin: 2rem 0 0.75rem; font-size: 1.1rem;">Simulation Video</h3>
+
+  <div class="video-wrap">
+    <video controls poster="../Image Renders/Simulation_Hawk1.png">
+      <source src="../Animation Renders/Simulation.mp4" type="video/mp4" />
+      <source src="../Animation Renders/Simulation_v004.mp4" type="video/mp4" />
+      Your browser does not support video playback.
+    </video>
+  </div>
+</section>
+
+<!-- ═══════════════════ REFLECTION ═══════════════════ -->
+<div class="divider"></div>
+<section id="reflection">
+  <a class="section-anchor" id="reflection-anchor"></a>
+  <div class="section-label">05 — Reflection</div>
+  <h2>Video Reflection</h2>
+
+  <p>
+    A personal reflection on the project journey — what worked, what I'd change, and what this year of building taught me about both engineering and cricket.
+  </p>
+
+  <div class="video-wrap" style="background: var(--card); min-height: 300px; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 1rem; border: 1px dashed var(--border);">
+    <div style="font-size: 2rem;">🎬</div>
+    <p style="color: var(--muted); text-align: center; margin: 0; font-size: 0.9rem;">
+      Drop your reflection video file here,<br/>or replace this placeholder with your video path below.
+    </p>
+    <!-- Replace the src below with your reflection video path once it exists -->
+    <!-- <video controls style="width:100%"><source src="../reflection.mp4" type="video/mp4" /></video> -->
+  </div>
+
+  <div class="highlight" style="margin-top: 2rem;">
+    <div class="highlight-label">Key Takeaway</div>
+    <p>The hardest part wasn't the code — it was learning that a single camera fundamentally cannot see depth, and that physics has to fill that gap. That constraint shaped every decision in the project.</p>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<footer>
+  <p>Hawkeye DRS — Cornerstone Project &nbsp;·&nbsp; <span>Vidit Kwatra</span> &nbsp;·&nbsp; 2025–26</p>
+  <p style="margin-top: 0.5rem; font-size: 0.78rem; color: #475569;">Built with Python · OpenCV · Blender · HTML/CSS</p>
+</footer>
+
+<script>
+  // Highlight active nav link on scroll
+  const sections = ['proposal', 'motivation', 'process', 'product', 'reflection'];
+  const navLinks = document.querySelectorAll('nav a:not(.logo)');
+
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        navLinks.forEach(a => a.classList.remove('active'));
+        const link = document.querySelector(`nav a[href="#${e.target.id}"]`);
+        if (link) link.classList.add('active');
+      }
+    });
+  }, { rootMargin: '-40% 0px -55% 0px' });
+
+  sections.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) observer.observe(el);
+  });
+</script>
+
+</body>
+</html>
